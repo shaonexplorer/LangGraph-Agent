@@ -61,8 +61,20 @@ const get_available_slots = tool(
   async (input, runtime: ToolRuntime<MessagesStateType>) => {
     // const state = runtime.state;
 
+    const start = new Date(`${input.date}T00:00:00.000Z`);
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 1);
+
+    const slots = await prisma.orm.public.Schedule.where({
+      status: "AVAILABLE",
+      doctorId: input.id,
+    }) // equality filters: object form
+      .where((s) => s.startTime.gte(start)) // comparisons: callback form
+      .where((s) => s.startTime.lt(end))
+      .all();
+
     return {
-      available_slots: ["10:00 AM", "10:30 AM", "11:00 AM"],
+      available_slots: slots,
     };
   },
   {
@@ -70,11 +82,26 @@ const get_available_slots = tool(
     description:
       "get available slots for appointment with provided doctor at provided date",
     schema: z.object({
-      name: z
+      id: z
         .string()
-        .describe("The name of the doctor to book an appointment with"),
-      date: z.string().describe("The date for the appointment"),
+        .describe("The id of the doctor to book an appointment with"),
+      date: z.string().describe("The date for the appointment e.g 2026-10-13"),
     }),
+  },
+);
+
+const get_current_date_time = tool(
+  async (input, runtime: ToolRuntime<MessagesStateType>) => {
+    const localDate = new Date().toLocaleDateString("en-CA", {
+      timeZone: "Asia/Dhaka",
+    });
+
+    return localDate;
+  },
+  {
+    name: "get_current_date_time",
+    description: "get current date/time e.g today",
+    schema: z.object({}),
   },
 );
 
@@ -82,6 +109,7 @@ const get_available_slots = tool(
 export const toolsByName = {
   [search_doctor.name]: search_doctor,
   [get_available_slots.name]: get_available_slots,
+  [get_current_date_time.name]: get_current_date_time,
 };
 
 export const tools = Object.values(toolsByName);
