@@ -1,0 +1,9 @@
+{
+  "node_version": "20",
+
+  "graphs": {
+    "default": "./src/modules/weather-agent/utils/agent.ts:agent"
+  },
+
+  "env": ".env"
+}

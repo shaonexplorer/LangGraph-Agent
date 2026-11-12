@@ -1,0 +1,251 @@
+// use prisma-8
+// Contract inferred from the live database schema. Edit as needed, then run `prisma contract emit`.
+
+namespace public {
+  model User {
+    id                        String                       @id(map: "user_pkey")
+    name                      String
+    email                     String
+    emailVerified             Boolean                      @default(false)
+    image                     String?
+    passwordHash              String                       @default("")
+    firstName                 String
+    lastName                  String
+    phone                     String?
+    userType                  pg.enum(UserType)            @default("PATIENT")
+    createdAt                 DateTime(storage: timestamp) @default(now())
+    updatedAt                 DateTime(storage: timestamp)
+    doctorProfile             DoctorProfile?
+    patientProfile            PatientProfile?
+    accounts                  Account[]
+    sessions                  Session[]
+    appointments              Appointment[]                @relation(name: "Appointment_doctorId_fkey")
+    appointmentsAppointment   Appointment[]                @relation(name: "Appointment_patientId_fkey")
+    prescriptions             Prescription[]               @relation(name: "Prescription_doctorId_fkey")
+    prescriptionsPrescription Prescription[]               @relation(name: "Prescription_patientId_fkey")
+
+    @@index([email], map: "user_email_idx")
+    @@index([email], map: "user_email_key", unique: true)
+    @@index([userType], map: "user_userType_idx")
+    @@map("user")
+  }
+
+  model Account {
+    id                    String                        @id(map: "account_pkey")
+    issuer                String                        @default("credentials")
+    accountId             String
+    providerId            String
+    userId                String
+    accessToken           String?
+    refreshToken          String?
+    idToken               String?
+    accessTokenExpiresAt  DateTime(storage: timestamp)?
+    refreshTokenExpiresAt DateTime(storage: timestamp)?
+    scope                 String?
+    password              String?
+    createdAt             DateTime(storage: timestamp)  @default(now())
+    updatedAt             DateTime(storage: timestamp)
+    user                  User                          @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "account_userId_fkey")
+
+    @@index([issuer, accountId], map: "account_issuer_accountId_key", unique: true)
+    @@index([userId], map: "account_userId_idx")
+    @@map("account")
+  }
+
+  model DoctorProfile {
+    id           String                           @id(map: "DoctorProfile_pkey")
+    userId       String
+    specialty    String
+    designation  String
+    licenseNo    String
+    bio          String?
+    fee          Decimal(precision: 10, scale: 2)
+    isVerified   Boolean                          @default(false)
+    searchVector String?
+    schedules    Schedule[]
+    user         User                             @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "DoctorProfile_userId_fkey")
+
+    @@index([isVerified], map: "DoctorProfile_isVerified_idx")
+    @@index([licenseNo], map: "DoctorProfile_licenseNo_idx")
+    @@index([licenseNo], map: "DoctorProfile_licenseNo_key", unique: true)
+    @@index([specialty], map: "DoctorProfile_specialty_idx")
+    @@index([userId], map: "DoctorProfile_userId_key", unique: true)
+  }
+
+  model Schedule {
+    id          String                       @id(map: "Schedule_pkey")
+    doctorId    String
+    startTime   DateTime(storage: timestamp)
+    endTime     DateTime(storage: timestamp)
+    status      pg.enum(SlotStatus)          @default("AVAILABLE")
+    createdAt   DateTime(storage: timestamp) @default(now())
+    updatedAt   DateTime(storage: timestamp)
+    appointment Appointment?
+    doctor      DoctorProfile                @relation(fields: [doctorId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "Schedule_doctorId_fkey", index: "Schedule_doctorId_startTime_idx")
+
+    @@index([doctorId, startTime], map: "Schedule_doctorId_startTime_idx")
+    @@index([doctorId, status], map: "Schedule_doctorId_status_idx")
+    @@index([status], map: "Schedule_status_idx")
+  }
+
+  model Appointment {
+    id               String                       @id(map: "Appointment_pkey")
+    patientId        String
+    doctorId         String
+    slotId           String
+    status           pg.enum(AppointmentStatus)   @default("SCHEDULED")
+    symptoms         String?
+    notes            String?
+    paymentStatus    pg.enum(PaymentStatus)       @default("PENDING")
+    consultationType pg.enum(ConsultationType)    @default("IN_PERSON")
+    createdAt        DateTime(storage: timestamp) @default(now())
+    updatedAt        DateTime(storage: timestamp)
+    prescriptions    Prescription[]
+    doctor           User                         @relation(name: "Appointment_doctorId_fkey", fields: [doctorId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "Appointment_doctorId_fkey", index: "Appointment_doctorId_status_idx")
+    patient          User                         @relation(name: "Appointment_patientId_fkey", fields: [patientId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "Appointment_patientId_fkey", index: "Appointment_patientId_status_idx")
+    slot             Schedule                     @relation(fields: [slotId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "Appointment_slotId_fkey")
+
+    @@index([createdAt], map: "Appointment_createdAt_idx")
+    @@index([doctorId, status], map: "Appointment_doctorId_status_idx")
+    @@index([patientId, status], map: "Appointment_patientId_status_idx")
+    @@index([slotId], map: "Appointment_slotId_idx")
+    @@index([slotId], map: "Appointment_slotId_key", unique: true)
+  }
+
+  model AuditLog {
+    id         String                       @id(map: "AuditLog_pkey")
+    userId     String?
+    action     String
+    resource   String
+    resourceId String?
+    oldData    Jsonb?
+    newData    Jsonb?
+    ipAddress  String?
+    userAgent  String?
+    createdAt  DateTime(storage: timestamp) @default(now())
+
+    @@index([createdAt], map: "AuditLog_createdAt_idx")
+    @@index([resource, resourceId], map: "AuditLog_resource_resourceId_idx")
+    @@index([userId], map: "AuditLog_userId_idx")
+  }
+
+  model Clinic {
+    id          String                       @id(map: "Clinic_pkey")
+    name        String
+    address     String?
+    phone       String?
+    email       String?
+    departments Int                          @default(0)
+    doctors     Int                          @default(0)
+    status      pg.enum(ClinicStatus)        @default("ACTIVE")
+    createdAt   DateTime(storage: timestamp) @default(now())
+    updatedAt   DateTime(storage: timestamp)
+
+    @@index([name], map: "Clinic_name_idx")
+    @@index([status], map: "Clinic_status_idx")
+  }
+
+  model PatientProfile {
+    id               String                        @id(map: "PatientProfile_pkey")
+    userId           String
+    dob              DateTime(storage: timestamp)?
+    gender           pg.enum(Gender)?
+    address          String?
+    emergencyContact String?
+    user             User                          @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "PatientProfile_userId_fkey")
+
+    @@index([userId], map: "PatientProfile_userId_key", unique: true)
+  }
+
+  model Prescription {
+    id            String                       @id(map: "Prescription_pkey")
+    appointmentId String
+    doctorId      String
+    patientId     String
+    diagnosis     String
+    medications   Jsonb
+    tests         String?
+    notes         String?
+    pdfUrl        String?
+    createdAt     DateTime(storage: timestamp) @default(now())
+    appointment   Appointment                  @relation(fields: [appointmentId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "Prescription_appointmentId_fkey")
+    doctor        User                         @relation(name: "Prescription_doctorId_fkey", fields: [doctorId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "Prescription_doctorId_fkey")
+    patient       User                         @relation(name: "Prescription_patientId_fkey", fields: [patientId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "Prescription_patientId_fkey")
+
+    @@index([appointmentId], map: "Prescription_appointmentId_idx")
+    @@index([doctorId], map: "Prescription_doctorId_idx")
+    @@index([patientId], map: "Prescription_patientId_idx")
+  }
+
+  model Session {
+    id        String                       @id(map: "session_pkey")
+    expiresAt DateTime(storage: timestamp)
+    token     String
+    createdAt DateTime(storage: timestamp) @default(now())
+    updatedAt DateTime(storage: timestamp)
+    ipAddress String?
+    userAgent String?
+    userId    String
+    user      User                         @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "session_userId_fkey")
+
+    @@index([expiresAt], map: "session_expiresAt_idx")
+    @@index([token], map: "session_token_key", unique: true)
+    @@index([userId], map: "session_userId_idx")
+    @@map("session")
+  }
+
+  model Verification {
+    id         String                       @id(map: "verification_pkey")
+    identifier String
+    value      String
+    expiresAt  DateTime(storage: timestamp)
+    createdAt  DateTime(storage: timestamp) @default(now())
+    updatedAt  DateTime(storage: timestamp)
+
+    @@map("verification")
+  }
+
+  native_enum AppointmentStatus {
+    SCHEDULED = "SCHEDULED"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
+    NO_SHOW = "NO_SHOW"
+  }
+
+  native_enum ClinicStatus {
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
+  }
+
+  native_enum ConsultationType {
+    IN_PERSON = "IN_PERSON"
+    VIDEO = "VIDEO"
+    PHONE = "PHONE"
+  }
+
+  native_enum Gender {
+    MALE = "MALE"
+    FEMALE = "FEMALE"
+    OTHER = "OTHER"
+    PREFER_NOT_TO_SAY = "PREFER_NOT_TO_SAY"
+  }
+
+  native_enum PaymentStatus {
+    PENDING = "PENDING"
+    PAID = "PAID"
+    REFUNDED = "REFUNDED"
+  }
+
+  native_enum SlotStatus {
+    AVAILABLE = "AVAILABLE"
+    BOOKED = "BOOKED"
+    CANCELLED = "CANCELLED"
+  }
+
+  native_enum UserType {
+    ADMIN = "ADMIN"
+    STAFF = "STAFF"
+    DOCTOR = "DOCTOR"
+    PATIENT = "PATIENT"
+  }
+}
