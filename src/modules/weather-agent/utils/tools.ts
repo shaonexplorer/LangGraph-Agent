@@ -14,7 +14,7 @@ const search_doctor = tool(
       .include("user")
       .all();
 
-    console.log({ doctors });
+    // console.log({ doctors });
 
     return new Command({
       update: {
@@ -53,39 +53,62 @@ const search_doctor = tool(
           "Cardiology",
         ])
         .describe("The medical speciality of the doctor to search for"),
+      date: z.string().describe("The date for the appointment e.g 2026-10-13"),
     }),
   },
 );
 
-const get_available_slots = tool(
+const search_available_slots = tool(
   async (input, runtime: ToolRuntime<MessagesStateType>) => {
-    // const state = runtime.state;
+    const state = runtime.state;
 
-    const start = new Date(`${input.date}T00:00:00.000Z`);
+    const id = input.id ?? state.selected_doctor?.id;
+
+    const date = input.date ?? state.selected_appointment_date;
+
+    if (!date)
+      return {
+        message:
+          "No Appointment Date selected. Ask the user to select an appointment date first",
+      };
+
+    if (!id)
+      return {
+        message: "No Doctor selected. Ask the user to select a doctor first",
+      };
+
+    const start = new Date(`${date}T00:00:00.000Z`);
     const end = new Date(start);
     end.setUTCDate(end.getUTCDate() + 1);
 
     const slots = await prisma.orm.public.Schedule.where({
       status: "AVAILABLE",
-      doctorId: input.id,
+      doctorId: id,
     }) // equality filters: object form
       .where((s) => s.startTime.gte(start)) // comparisons: callback form
       .where((s) => s.startTime.lt(end))
+      .include("doctor")
+      .select("doctorId", "startTime", "id")
       .all();
 
     return {
-      available_slots: slots,
+      available_slots: slots.length > 0 ? slots : "No available slots found",
+      next_action: "View the available slots to the user",
     };
   },
   {
-    name: "get_available_slots_for_appointment",
+    name: "search_available_slots_for_appointment",
     description:
-      "get available slots for appointment with provided doctor at provided date",
+      "search available slots for appointment with provided doctorId and date if date is not available then ask the user for the date",
     schema: z.object({
       id: z
         .string()
+        .optional()
         .describe("The id of the doctor to book an appointment with"),
-      date: z.string().describe("The date for the appointment e.g 2026-10-13"),
+      date: z
+        .string()
+        .optional()
+        .describe("The date for the appointment e.g 2026-10-13"),
     }),
   },
 );
@@ -105,11 +128,40 @@ const get_current_date_time = tool(
   },
 );
 
+const set_appointment_date = tool(
+  async (input, runtime: ToolRuntime<MessagesStateType>) => {
+    return new Command({
+      update: {
+        selected_appointment_date: input.date,
+        messages: [
+          new ToolMessage({
+            content: JSON.stringify({
+              selected_appointment_date: input.date,
+            }),
+            tool_call_id: runtime.toolCallId,
+            name: "set_appointment_date",
+          }),
+        ],
+      },
+    });
+  },
+  {
+    name: "set_appointment_date",
+    description: "set the date for appointment  e.g 2026-10-13",
+    schema: z.object({
+      date: z
+        .string()
+        .describe("selected date by user for the appointment e.g 2026-10-13"),
+    }),
+  },
+);
+
 // Augment the LLM with tools
 export const toolsByName = {
   [search_doctor.name]: search_doctor,
-  [get_available_slots.name]: get_available_slots,
+  [search_available_slots.name]: search_available_slots,
   [get_current_date_time.name]: get_current_date_time,
+  [set_appointment_date.name]: set_appointment_date,
 };
 
 export const tools = Object.values(toolsByName);

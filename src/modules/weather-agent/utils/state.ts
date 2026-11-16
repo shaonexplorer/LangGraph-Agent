@@ -31,6 +31,14 @@ export const MessagesState = Annotation.Root({
     reducer: (current, update) => update ?? current,
     default: () => undefined,
   }),
+  selected_appointment_date: Annotation<string | undefined>({
+    reducer: (current, update) => update ?? current,
+    default: () => undefined,
+  }),
+  selected_slot_id: Annotation<string | undefined>({
+    reducer: (current, update) => update ?? current,
+    default: () => undefined,
+  }),
 });
 
 export type MessagesStateType = typeof MessagesState.State;

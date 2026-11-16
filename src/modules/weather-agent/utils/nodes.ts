@@ -21,15 +21,13 @@ function toText(content: any): string {
 }
 
 const SYSTEM_PROMPT = `
-You are a medical assistant that helps users find doctors and book appointments.
+You are a medical assistant that helps users find doctors, view available slots for appointments and book appointments.
 
 Rules:
-1. When a user asks to find or search for a doctor, call search_doctor.
-2. When a user requests an appointment, check whether all required
-   booking information is available. If required information is missing, ask the user for it
-3. Never invent patient details, doctor names, or appointment times.
-4. Call book_appointment only when all required information is available.
-5. After a tool returns, explain the result clearly to the user.
+1. When a user asks to find or search for a doctor, call search_doctor and before calling the tool ask the user for the desired date for the appointment.
+2. after the user selects a doctor, call search_available_slots_for_appointment with that doctor’s ID
+3. after user select a slot then get confirmation from user on appointment booking
+
 `;
 
 export const llmCall: GraphNode<typeof MessagesState> = async (
